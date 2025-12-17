@@ -1,3 +1,45 @@
+# Updates:
+
+The Emby plugin now downloads images from the Emby server and stores them locally in
+/config/www/upcoming-media-card-images/emby/, similar to the Plex plugin.
+
+Key Features
+
+✅ Local image storage – works everywhere without proxy configuration
+✅ Background downloading – does not block Home Assistant
+✅ Automatic cleanup – removes old images
+✅ Caching – images are downloaded only once
+✅ Thread-safe – works correctly in a multithreaded environment
+
+How It Works
+
+On First Run
+	•	The plugin creates a directory for images
+	•	Removes old files (if any)
+	•	While updating data, it generates poster URLs
+
+⸻
+
+When Data Is Retrieved
+	•	The sensor gets a list of media items from the Emby API
+	•	For each item, get_image_url() is called
+	•	If the image does not exist locally:
+	•	A background thread is started to download it
+	•	A local URL /local/... is returned
+	•	On the next update, the image already exists locally
+
+⸻
+
+Old Image Cleanup
+
+Runs once during plugin initialization (on Home Assistant startup or config reload):
+	•	Scans the image directory
+	•	Checks the modification date of each .jpg file
+	•	Deletes files older than img_cache_days
+	•	Logs the number of deleted files
+
+  
+
 # Emby Latest Media Component
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)

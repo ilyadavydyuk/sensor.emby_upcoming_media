@@ -11,6 +11,7 @@ import logging
 import json
 import time
 import re
+import os
 import requests
 import dateutil.parser
 from datetime import date, datetime
@@ -25,7 +26,7 @@ from homeassistant.helpers.entity import Entity
 
 from .client import EmbyClient
 
-__version__ = "0.0.1"
+__version__ = "0.4.1"
 
 DOMAIN = "emby_upcoming_media"
 DOMAIN_DATA = f"{DOMAIN}_data"
@@ -43,6 +44,8 @@ CONF_USER_ID = "user_id"
 CONF_USE_BACKDROP = "use_backdrop"
 CONF_GROUP_LIBRARIES = "group_libraries"
 CONF_EPISODES = "episodes"
+CONF_IMG_DIR = "img_dir"
+CONF_IMG_CACHE_DAYS = "img_cache_days"
 
 CATEGORY_NAME = "CategoryName"
 CATEGORY_ID = "CategoryId"
@@ -70,7 +73,9 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_MAX, default=5): cv.Number,
         vol.Optional(CONF_USE_BACKDROP, default=False): cv.boolean,
         vol.Optional(CONF_GROUP_LIBRARIES, default=False): cv.boolean,
-        vol.Optional(CONF_EPISODES, default=True): cv.boolean
+        vol.Optional(CONF_EPISODES, default=True): cv.boolean,
+        vol.Optional(CONF_IMG_DIR, default=""): cv.string,
+        vol.Optional(CONF_IMG_CACHE_DAYS, default=30): cv.positive_int,
     }
 )
 
@@ -89,9 +94,21 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     user_id = config.get(CONF_USER_ID)
     include = config.get(CONF_INCLUDE)
     show_episodes = config.get(CONF_EPISODES)
+    img_dir = config.get(CONF_IMG_DIR)
+    img_cache_days = config.get(CONF_IMG_CACHE_DAYS)
+    
+    # If img_dir is not specified or empty, use default path
+    if not img_dir:
+        img_dir = os.path.join(hass.config.path("www"), "upcoming-media-card-images", "emby")
+        _LOGGER.info("Using default image directory: %s", img_dir)
+    else:
+        # If relative path, make it relative to HA config
+        if not os.path.isabs(img_dir):
+            img_dir = hass.config.path(img_dir)
+        _LOGGER.info("Using custom image directory: %s", img_dir)
 
     # Configure the client.
-    client = EmbyClient(host, api_key, ssl, port, max_items, user_id, show_episodes)
+    client = EmbyClient(host, api_key, ssl, port, max_items, user_id, show_episodes, img_dir, img_cache_days)
     hass.data[DOMAIN_DATA]["client"] = client
 
     categories = client.get_view_categories()
@@ -121,6 +138,7 @@ SCAN_INTERVAL = timedelta(seconds=SCAN_INTERVAL_SECONDS)
 class EmbyUpcomingMediaSensor(Entity):
     def __init__(self, hass, conf):
         self._client = hass.data[DOMAIN_DATA]["client"]
+        self.hass = hass
         self._state = None
         self.data = []
         self.use_backdrop = conf.get(CONF_USE_BACKDROP)
@@ -429,4 +447,4 @@ class EmbyUpcomingMediaSensor(Entity):
             self.data = data
         else:
             self._state = "error"
-            _LOGGER.error("ERROR")
+            _LOGGER.error("Failed to get data from Emby")
